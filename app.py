@@ -1,6 +1,11 @@
 
 import json
 from pathlib import Path
+import cv2
+import numpy as np
+
+
+from src.inspection import inspect_pcb
 
 import streamlit as st
 from PIL import Image
@@ -441,3 +446,222 @@ if annotations:
 
 else:
     st.warning("No components have been registered yet.")
+
+
+# --------------------------------------------------
+# 5. PCB INSPECTION
+# --------------------------------------------------
+
+st.divider()
+st.header("5. Inspect Test PCB Images")
+
+st.write(
+    "Upload up to three photographs of the same PCB. "
+    "The system will align each image with the reference and "
+    "check the registered component locations."
+)
+
+if not st.session_state.annotations:
+    st.warning(
+        "Register at least one component before starting inspection."
+    )
+
+else:
+
+    test_files = st.file_uploader(
+        "Upload test PCB images",
+        type=["png", "jpg", "jpeg"],
+        accept_multiple_files=True,
+        key="test_pcb_uploader",
+        help="Upload up to three images of the same PCB.",
+    )
+
+    if len(test_files) > 3:
+        st.error("Please upload no more than three test images.")
+
+    elif test_files:
+
+        # Convert the stored reference image from RGB to OpenCV BGR.
+        reference_bgr = cv2.cvtColor(
+            np.array(st.session_state.reference_image),
+            cv2.COLOR_RGB2BGR,
+        )
+
+        st.subheader("Inspection Results")
+
+        for image_index, uploaded_test in enumerate(test_files):
+
+            with st.expander(
+                f"Test {image_index + 1}: {uploaded_test.name}",
+                expanded=True,
+            ):
+
+                try:
+                    file_bytes = uploaded_test.getvalue()
+
+                    test_array = np.frombuffer(
+                        file_bytes,
+                        dtype=np.uint8,
+                    )
+
+                    test_bgr = cv2.imdecode(
+                        test_array,
+                        cv2.IMREAD_COLOR,
+                    )
+
+                    if test_bgr is None:
+                        st.error("Could not read this image.")
+                        continue
+
+                    # Run alignment and component inspection.
+                    result = inspect_pcb(
+                        reference_bgr,
+                        test_bgr,
+                        st.session_state.annotations,
+                    )
+
+                    if not result["success"]:
+                        st.error(result["message"])
+
+                        st.write("Alignment diagnostics:")
+                        st.json(result["alignment"])
+
+                        continue
+
+                    alignment = result["alignment"]
+
+                    # Display alignment quality.
+                    st.markdown("**Alignment Quality**")
+
+                    metric_col1, metric_col2, metric_col3 = st.columns(3)
+
+                    metric_col1.metric(
+                        "Good matches",
+                        alignment["good_matches"],
+                    )
+
+                    metric_col2.metric(
+                        "Inlier ratio",
+                        f"{alignment['inlier_ratio']:.1%}",
+                    )
+
+                    metric_col3.metric(
+                        "Reprojection error",
+                        f"{alignment['mean_reprojection_error']:.2f} px",
+                    )
+
+                    # Display overall inspection status.
+                    missing = result["missing"]
+                    uncertain = result["uncertain"]
+                    present = result["present"]
+
+                    if missing:
+                        st.error(
+                            "Potential missing components: "
+                            + ", ".join(missing)
+                        )
+
+                    elif uncertain:
+                        st.warning(
+                            "Manual review required for: "
+                            + ", ".join(uncertain)
+                        )
+
+                    else:
+                        st.success(
+                            "OK — All registered components appear present."
+                        )
+
+                    # Component-level results.
+                    st.markdown("**Component Inspection Details**")
+
+                    result_rows = []
+
+                    for component in result["components"]:
+                        result_rows.append({
+                            "Component": component["name"],
+                            "Status": component["status"],
+                            "SSIM": component["ssim"],
+                            "Difference": component["difference"],
+                        })
+
+                    st.dataframe(
+                        result_rows,
+                        use_container_width=True,
+                        hide_index=True,
+                    )
+
+                    # Draw result boxes on the aligned image.
+                    annotated_image = result["aligned_image"].copy()
+
+                    image_height, image_width = annotated_image.shape[:2]
+
+                    for annotation in st.session_state.annotations:
+
+                        component_result = next(
+                            item
+                            for item in result["components"]
+                            if item["name"] == annotation["name"]
+                        )
+
+                        status = component_result["status"]
+
+                        # OpenCV colors are BGR.
+                        if status == "MISSING":
+                            box_color = (0, 0, 255)
+                        elif status == "UNCERTAIN":
+                            box_color = (0, 165, 255)
+                        else:
+                            box_color = (0, 200, 0)
+
+                        x1 = int(annotation["x"] * image_width)
+                        y1 = int(annotation["y"] * image_height)
+
+                        x2 = int(
+                            (annotation["x"] + annotation["width"])
+                            * image_width
+                        )
+
+                        y2 = int(
+                            (annotation["y"] + annotation["height"])
+                            * image_height
+                        )
+
+                        cv2.rectangle(
+                            annotated_image,
+                            (x1, y1),
+                            (x2, y2),
+                            box_color,
+                            3,
+                        )
+
+                        label = f"{annotation['name']}: {status}"
+
+                        cv2.putText(
+                            annotated_image,
+                            label,
+                            (x1, max(25, y1 - 8)),
+                            cv2.FONT_HERSHEY_SIMPLEX,
+                            0.65,
+                            box_color,
+                            2,
+                            cv2.LINE_AA,
+                        )
+
+                    annotated_rgb = cv2.cvtColor(
+                        annotated_image,
+                        cv2.COLOR_BGR2RGB,
+                    )
+
+                    st.markdown("**Visual Inspection Result**")
+
+                    st.image(
+                        annotated_rgb,
+                        caption="Green: Present | Red: Missing | Orange: Uncertain",
+                        use_container_width=True,
+                    )
+
+                except Exception as error:
+                    st.error(
+                        f"Inspection failed for {uploaded_test.name}: {error}"
+                    )

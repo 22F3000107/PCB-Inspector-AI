@@ -101,33 +101,40 @@ def calculate_region_similarity(reference_region, test_region):
     return float(ssim_score), difference_score
 
 
+
 def classify_component(
     ssim_score,
     difference_score,
-    present_ssim_threshold=0.85,
+    present_ssim_threshold=0.60,
+    present_difference_threshold=0.12,
     missing_ssim_threshold=0.45,
     missing_difference_threshold=0.10,
 ):
     """
-    Conservative initial classification.
+    Provisional classification thresholds based on initial
+    synthetic PCB inspection experiments.
 
-    These thresholds are starting values, not calibrated production
-    thresholds. They must be evaluated on representative PCB images.
+    These values require further validation on representative
+    real-world PCB images.
     """
 
+    # Component appears present
     if (
         ssim_score >= present_ssim_threshold
-        and difference_score < missing_difference_threshold
+        and difference_score < present_difference_threshold
     ):
         return "PRESENT"
 
+    # Component appears missing
     if (
         ssim_score < missing_ssim_threshold
         and difference_score >= missing_difference_threshold
     ):
         return "MISSING"
 
+    # Insufficient evidence for a confident decision
     return "UNCERTAIN"
+
 
 
 def inspect_component_region(
