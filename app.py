@@ -10,14 +10,27 @@ from src.annotation import (
     save_annotations,
     load_annotations,
     add_annotation,
-    delete_annotation
+    delete_annotation,
 )
+
+
+# --------------------------------------------------
+# PAGE CONFIGURATION
+# --------------------------------------------------
 
 st.set_page_config(
     page_title="PCB Inspector AI",
     page_icon="🔬",
-    layout="wide"
+    layout="wide",
 )
+
+st.title("🔬 PCB Inspector AI")
+st.caption("Reference-Based PCB Component Inspection System")
+
+
+# --------------------------------------------------
+# PATHS AND CONFIGURATION
+# --------------------------------------------------
 
 ANNOTATION_DIR = Path("data/annotations")
 REFERENCE_DIR = Path("data/reference")
@@ -28,8 +41,48 @@ REFERENCE_DIR.mkdir(parents=True, exist_ok=True)
 REFERENCE_PATH = REFERENCE_DIR / "reference.png"
 REFERENCE_METADATA_PATH = REFERENCE_DIR / "metadata.json"
 
-st.title("🔬 PCB Inspector AI")
-st.caption("Reference-Based PCB Component Inspection System")
+CANVAS_VERSION = "7.4.0"
+MAX_DISPLAY_WIDTH = 1000
+
+
+# --------------------------------------------------
+# HELPER FUNCTIONS
+# --------------------------------------------------
+
+def create_canvas_drawing(annotations, display_width, display_height):
+    """Rebuild canvas rectangles from saved normalized annotations."""
+
+    objects = []
+
+    for annotation in annotations:
+        objects.append({
+            "type": "Rect",
+            "version": CANVAS_VERSION,
+            "originX": "left",
+            "originY": "top",
+            "left": annotation["x"] * display_width,
+            "top": annotation["y"] * display_height,
+            "width": annotation["width"] * display_width,
+            "height": annotation["height"] * display_height,
+            "fill": "rgba(0, 150, 255, 0.15)",
+            "stroke": "#00BFFF",
+            "strokeWidth": 2,
+            "scaleX": 1,
+            "scaleY": 1,
+            "angle": 0,
+            "component_name": annotation["name"],
+        })
+
+    return {
+        "version": CANVAS_VERSION,
+        "objects": objects,
+    }
+
+
+def save_current_annotations():
+    """Persist the current component annotations."""
+
+    save_annotations(st.session_state.annotations)
 
 
 # --------------------------------------------------
@@ -41,121 +94,97 @@ if "annotations" not in st.session_state:
 
 if "canvas_drawing" not in st.session_state:
     st.session_state.canvas_drawing = {
-        "version": "7.4.0",
-        "objects": []
+        "version": CANVAS_VERSION,
+        "objects": [],
     }
 
-if "assigned_rectangles" not in st.session_state:
-    st.session_state.assigned_rectangles = {}
+if "reference_image" not in st.session_state:
+    if REFERENCE_PATH.exists():
+        st.session_state.reference_image = Image.open(
+            REFERENCE_PATH
+        ).convert("RGB")
+    else:
+        st.session_state.reference_image = None
+
+if "image_signature" not in st.session_state:
+    if REFERENCE_METADATA_PATH.exists():
+        with open(REFERENCE_METADATA_PATH, "r") as file:
+            metadata = json.load(file)
+
+        st.session_state.image_signature = (
+            metadata["filename"],
+            (metadata["width"], metadata["height"]),
+            metadata["file_size"],
+        )
+    else:
+        st.session_state.image_signature = None
 
 if "canvas_restored" not in st.session_state:
     st.session_state.canvas_restored = False
 
-if "reference_image" not in st.session_state:
-    if REFERENCE_PATH.exists():
-        st.session_state.reference_image = (
-            Image.open(REFERENCE_PATH).convert("RGB")
-        )
-    else:
-        st.session_state.reference_image = None
-
-if "image_signature" not in st.session_state:
-    if REFERENCE_METADATA_PATH.exists():
-        with open(REFERENCE_METADATA_PATH) as f:
-            metadata = json.load(f)
-
-        st.session_state.image_signature = (
-            metadata["filename"],
-            (metadata["width"], metadata["height"]),
-            metadata["file_size"]
-        )
-    else:
-        st.session_state.image_signature = None
-
-
-if "canvas_drawing" not in st.session_state:
-    st.session_state.canvas_drawing = {
-        "version": "4.4.0",
-        "objects": []
-    }
-
-if "reference_image" not in st.session_state:
-    if REFERENCE_PATH.exists():
-        st.session_state.reference_image = (
-            Image.open(REFERENCE_PATH).convert("RGB")
-        )
-    else:
-        st.session_state.reference_image = None
-
-if "image_signature" not in st.session_state:
-    if REFERENCE_METADATA_PATH.exists():
-        with open(REFERENCE_METADATA_PATH) as f:
-            metadata = json.load(f)
-
-        st.session_state.image_signature = (
-            metadata["filename"],
-            (metadata["width"], metadata["height"]),
-            metadata["file_size"]
-        )
-    else:
-        st.session_state.image_signature = None
-
 
 # --------------------------------------------------
-# REFERENCE IMAGE
+# 1. REFERENCE IMAGE SETUP
 # --------------------------------------------------
 
 st.header("1. Reference PCB Setup")
 
 uploaded_file = st.file_uploader(
     "Upload a complete PCB reference image",
-    type=["png", "jpg", "jpeg"]
+    type=["png", "jpg", "jpeg"],
 )
 
 if uploaded_file is not None:
 
     file_bytes = uploaded_file.getvalue()
-    image = Image.open(uploaded_file).convert("RGB")
+
+    from io import BytesIO
+
+    image = Image.open(BytesIO(file_bytes)).convert("RGB")
 
     image_signature = (
         uploaded_file.name,
         image.size,
-        len(file_bytes)
+        len(file_bytes),
     )
 
     if image_signature != st.session_state.image_signature:
 
-        # Save reference image permanently
+        # Save reference image
         image.save(REFERENCE_PATH, format="PNG")
 
-        # Save image metadata
+        # Save reference metadata
         metadata = {
             "filename": uploaded_file.name,
             "width": image.width,
             "height": image.height,
-            "file_size": len(file_bytes)
+            "file_size": len(file_bytes),
         }
 
-        with open(REFERENCE_METADATA_PATH, "w") as f:
-            json.dump(metadata, f, indent=4)
+        with open(REFERENCE_METADATA_PATH, "w") as file:
+            json.dump(metadata, file, indent=4)
 
         st.session_state.reference_image = image
         st.session_state.image_signature = image_signature
 
-        # Reset old annotations for the new reference
+        # Clear old annotations for the new reference
         st.session_state.annotations = []
+        save_current_annotations()
 
         st.session_state.canvas_drawing = {
-            "version": "4.4.0",
-            "objects": []
+            "version": CANVAS_VERSION,
+            "objects": [],
         }
 
-        st.session_state.assigned_rectangles = {}
-        st.session_state.canvas_restored = False
+        st.session_state.canvas_restored = True
+
+        st.success("New reference PCB image saved successfully!")
+
 
 if st.session_state.reference_image is None:
     st.info("Upload a complete PCB image to start annotating.")
     st.stop()
+
 
 image = st.session_state.reference_image
 
@@ -163,8 +192,9 @@ st.success(
     f"Reference loaded: {image.width} × {image.height} pixels"
 )
 
+
 # --------------------------------------------------
-# COMPONENT ANNOTATION
+# 2. COMPONENT ANNOTATION
 # --------------------------------------------------
 
 st.divider()
@@ -172,12 +202,14 @@ st.header("2. Annotate PCB Components")
 
 st.write(
     "Draw a rectangle around each component using your mouse. "
-    "Then select the rectangle and assign a component name."
+    "Then register it with a component name."
 )
 
-# Keep the canvas within a reasonable display width.
-display_width = min(image.width, 1000)
-display_height = int(image.height * display_width / image.width)
+display_width = min(image.width, MAX_DISPLAY_WIDTH)
+
+display_height = int(
+    image.height * display_width / image.width
+)
 
 display_image = image.resize(
     (display_width, display_height)
@@ -185,49 +217,16 @@ display_image = image.resize(
 
 
 # --------------------------------------------------
-# RESTORE SAVED ANNOTATIONS ON RESTART
+# RESTORE SAVED ANNOTATIONS
 # --------------------------------------------------
 
 if not st.session_state.canvas_restored:
 
-    restored_objects = []
-
-    for annotation in st.session_state.annotations:
-
-        restored_objects.append({
-            "type": "Rect",
-            "version": "7.4.0",
-            "originX": "left",
-            "originY": "top",
-
-            "left": annotation["x"] * display_width,
-            "top": annotation["y"] * display_height,
-
-            "width": annotation["width"] * display_width,
-            "height": annotation["height"] * display_height,
-
-            "fill": "rgba(0, 150, 255, 0.15)",
-            "stroke": "#00BFFF",
-            "strokeWidth": 2,
-
-            "scaleX": 1,
-            "scaleY": 1,
-            "angle": 0,
-
-            "component_name": annotation["name"]
-        })
-
-    st.session_state.canvas_drawing = {
-        "version": "7.4.0",
-        "objects": restored_objects
-    }
-
-    st.session_state.assigned_rectangles = {
-        index: annotation["name"]
-        for index, annotation in enumerate(
-            st.session_state.annotations
-        )
-    }
+    st.session_state.canvas_drawing = create_canvas_drawing(
+        st.session_state.annotations,
+        display_width,
+        display_height,
+    )
 
     st.session_state.canvas_restored = True
 
@@ -235,36 +234,38 @@ if not st.session_state.canvas_restored:
 canvas_col, info_col = st.columns([3, 1])
 
 with canvas_col:
+
     st.subheader("PCB Annotation Canvas")
 
     canvas_result = st_canvas(
-      fill_color="rgba(0, 150, 255, 0.15)",
-      stroke_width=2,
-      stroke_color="#00BFFF",
-      background_image=display_image,
-      update_streamlit=True,
-      height=display_height,
-      width=display_width,
-      drawing_mode="rect",
-      initial_drawing=st.session_state.canvas_drawing,
-      key="pcb_annotation_canvas"
+        fill_color="rgba(0, 150, 255, 0.15)",
+        stroke_width=2,
+        stroke_color="#00BFFF",
+        background_image=display_image,
+        update_streamlit=True,
+        height=display_height,
+        width=display_width,
+        drawing_mode="rect",
+        initial_drawing=st.session_state.canvas_drawing,
+        key="pcb_annotation_canvas",
     )
 
     if canvas_result.json_data is not None:
         st.session_state.canvas_drawing = canvas_result.json_data
 
+
 with info_col:
+
     st.subheader("Instructions")
 
     st.markdown(
         """
-        1. Select rectangle tool.
-        2. Draw around a component.
-        3. Select its rectangle.
-        4. Assign a name.
-        5. Save the annotation.
+        1. Draw a rectangle around a component.
+        2. Select its rectangle from the list.
+        3. Enter its component name.
+        4. Click Register Component.
 
-        Examples:
+        **Examples:**
 
         - R1: Resistor
         - C1: Capacitor
@@ -274,8 +275,9 @@ with info_col:
         """
     )
 
+
 # --------------------------------------------------
-# ASSIGN COMPONENT NAMES
+# 3. REGISTER COMPONENTS
 # --------------------------------------------------
 
 st.divider()
@@ -284,24 +286,14 @@ st.subheader("3. Register Components")
 objects = (
     canvas_result.json_data.get("objects", [])
     if canvas_result.json_data
-    else []
+    else st.session_state.canvas_drawing.get("objects", [])
 )
-
-st.subheader("Debug: Canvas Data")
-
-if canvas_result.json_data:
-    st.write("Canvas objects detected:")
-    st.json(canvas_result.json_data.get("objects", []))
-else:
-    st.warning("No canvas data received.")
-
 
 rectangles = [
     (index, obj)
     for index, obj in enumerate(objects)
     if str(obj.get("type", "")).lower() == "rect"
 ]
-
 
 existing_names = {
     item["name"] for item in st.session_state.annotations
@@ -310,7 +302,7 @@ existing_names = {
 available_rectangles = [
     (index, obj)
     for index, obj in rectangles
-    if index not in st.session_state.assigned_rectangles
+    if not obj.get("component_name")
 ]
 
 if available_rectangles:
@@ -318,12 +310,12 @@ if available_rectangles:
     selected_index = st.selectbox(
         "Select an unassigned rectangle",
         options=[index for index, _ in available_rectangles],
-        format_func=lambda i: f"Rectangle {i + 1}"
+        format_func=lambda index: f"Rectangle {index + 1}",
     )
 
     component_name = st.text_input(
         "Component name",
-        placeholder="Example: R1, C1, U1"
+        placeholder="Example: R1, C1, U1",
     )
 
     if st.button("Register Component", type="primary"):
@@ -331,7 +323,8 @@ if available_rectangles:
         name = component_name.strip().upper()
 
         selected_object = next(
-            obj for index, obj in available_rectangles
+            obj
+            for index, obj in available_rectangles
             if index == selected_index
         )
 
@@ -342,6 +335,7 @@ if available_rectangles:
             st.error("This component name already exists.")
 
         else:
+
             left = selected_object.get("left", 0)
             top = selected_object.get("top", 0)
 
@@ -355,42 +349,42 @@ if available_rectangles:
                 * selected_object.get("scaleY", 1)
             )
 
-            # Store normalized coordinates.
-            annotation = add_annotation(
-                name,
-                left / display_width,
-                top / display_height,
-                box_width / display_width,
-                box_height / display_height
-            )
+            if box_width <= 0 or box_height <= 0:
+                st.error("Please draw a valid rectangle.")
 
-            annotation["image_width"] = image.width
-            annotation["image_height"] = image.height
+            else:
 
-            st.session_state.annotations.append(annotation)
+                annotation = add_annotation(
+                    name,
+                    left / display_width,
+                    top / display_height,
+                    box_width / display_width,
+                    box_height / display_height,
+                )
 
-# Attach component name to the rectangle
-            selected_object["component_name"] = name
+                annotation["image_width"] = image.width
+                annotation["image_height"] = image.height
 
-# Update assignment mapping
-            st.session_state.assigned_rectangles[selected_index] = name
+                st.session_state.annotations.append(annotation)
 
-# Preserve the updated canvas
-            st.session_state.canvas_drawing = canvas_result.json_data
+                # Store the name directly on the canvas rectangle
+                selected_object["component_name"] = name
 
-            st.success(f"{name} registered successfully!")
+                st.session_state.canvas_drawing = canvas_result.json_data
 
-            st.rerun()
+                # Save immediately
+                save_current_annotations()
 
-            st.success(f"{name} registered successfully!")
+                st.success(f"{name} registered and saved successfully!")
 
-            st.rerun()
+                st.rerun()
 
 else:
     st.info("Draw a rectangle to register a component.")
 
+
 # --------------------------------------------------
-# COMPONENT TABLE
+# 4. REGISTERED COMPONENTS
 # --------------------------------------------------
 
 st.divider()
@@ -402,72 +396,48 @@ if annotations:
 
     st.dataframe(
         annotations,
-        use_container_width=True
+        use_container_width=True,
     )
 
-    col1, col2 = st.columns(2)
+    st.success(f"{len(annotations)} component(s) registered.")
 
-    with col1:
-        if st.button("Save All Annotations"):
-            output_path = save_annotations(annotations)
-            st.success(f"Saved: {output_path}")
+    if st.button("Save All Annotations"):
+        save_current_annotations()
+        st.success("All annotations saved successfully.")
 
-    with col2:
-        selected_delete = st.selectbox(
-            "Component to delete",
-            options=["Select"] + [
-                item["name"] for item in annotations
-            ],
-            key="delete_component"
-        )
+    selected_delete = st.selectbox(
+        "Component to delete",
+        options=["Select"] + [
+            item["name"] for item in annotations
+        ],
+        key="delete_component",
+    )
 
-        
-if st.button("Delete Selected Component"):
+    if st.button("Delete Selected Component"):
 
-    if selected_delete != "Select":
+        if selected_delete == "Select":
+            st.warning("Please select a component to delete.")
 
-        # Remove annotation
-        st.session_state.annotations = delete_annotation(
-            st.session_state.annotations,
-            selected_delete
-        )
+        else:
 
-        # Remove corresponding rectangle
-        old_objects = st.session_state.canvas_drawing.get(
-            "objects", []
-        )
+            st.session_state.annotations = delete_annotation(
+                st.session_state.annotations,
+                selected_delete,
+            )
 
-        old_assignments = st.session_state.assigned_rectangles
+            # Rebuild canvas without the deleted component
+            st.session_state.canvas_drawing = create_canvas_drawing(
+                st.session_state.annotations,
+                display_width,
+                display_height,
+            )
 
-        new_objects = []
-        new_assignments = {}
+            # Persist deletion immediately
+            save_current_annotations()
 
-        for index, obj in enumerate(old_objects):
+            st.success(f"{selected_delete} deleted successfully!")
 
-            component_name = old_assignments.get(index)
-
-            if component_name != selected_delete:
-
-                new_index = len(new_objects)
-                new_objects.append(obj)
-
-                if component_name:
-                    new_assignments[new_index] = component_name
-
-        st.session_state.canvas_drawing = {
-            "version": "7.4.0",
-            "objects": new_objects
-        }
-
-        st.session_state.assigned_rectangles = new_assignments
-
-        # Persist deletion immediately
-        save_annotations(st.session_state.annotations)
-
-        st.rerun()
-
+            st.rerun()
 
 else:
     st.warning("No components have been registered yet.")
-
-
