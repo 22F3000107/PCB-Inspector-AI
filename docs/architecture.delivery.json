@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "receiptId": "470c96cd-3e1e-4e8d-80ff-efd353add50a",
+  "status": "current",
+  "command": "deliver",
+  "type": "architecture",
+  "input": "/Users/deepakkumar/PCB-Inspector-AI/.archify/architecture-pcb-inspector-20261120/candidate.json",
+  "output": "/Users/deepakkumar/PCB-Inspector-AI/docs/architecture.html",
+  "specification": {
+    "sha256": "f7c3e5f1f06745a1882c3cabb2f2659b472971d7012fbd59804687ae8c1b0372",
+    "bytes": 7083
+  },
+  "artifact": {
+    "sha256": "ec48ad8a3cd78a78a1b862500a9e5ff47c2ebc9bf873acddaf1507e4248de73d",
+    "bytes": 849893
+  }
+}

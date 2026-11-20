@@ -1,0 +1,158 @@
+{
+  "schemaVersion": 1,
+  "ok": true,
+  "command": "finalize",
+  "status": "pass",
+  "type": "architecture",
+  "quality": "showcase",
+  "specification": {
+    "path": "/Users/deepakkumar/PCB-Inspector-AI/.archify/architecture-pcb-inspector-20261120/candidate.json",
+    "sha256": "f7c3e5f1f06745a1882c3cabb2f2659b472971d7012fbd59804687ae8c1b0372",
+    "bytes": 7083
+  },
+  "artifact": {
+    "path": "/Users/deepakkumar/PCB-Inspector-AI/docs/architecture.html",
+    "sha256": "ec48ad8a3cd78a78a1b862500a9e5ff47c2ebc9bf873acddaf1507e4248de73d",
+    "bytes": 849893
+  },
+  "gates": {
+    "validate": "pass",
+    "deliver": "pass",
+    "check": "pass",
+    "browser-check": "pass"
+  },
+  "diagnostics": [],
+  "diagnosticSummary": {
+    "total": 0,
+    "shown": 0,
+    "truncated": false
+  },
+  "evidence": {
+    "receipt": "/Users/deepakkumar/PCB-Inspector-AI/docs/architecture-review-2/architecture.finalize.json",
+    "summaryReceipt": "/Users/deepakkumar/PCB-Inspector-AI/docs/architecture-review-2/architecture.finalize-summary.json",
+    "browserCheckReceipt": "/Users/deepakkumar/PCB-Inspector-AI/docs/architecture-review-2/architecture.browser-check.json"
+  },
+  "update": {
+    "status": "current",
+    "installedVersion": "3.2.0",
+    "availableVersion": "3.2.0",
+    "releaseNotes": null,
+    "checkedAt": "2026-11-20T13:42:56.202Z",
+    "source": "cache",
+    "noticeRequired": false,
+    "noticeText": null
+  },
+  "visualReview": "not-requested",
+  "durationMs": 3386,
+  "browserCheck": {
+    "requested": true,
+    "ran": true
+  },
+  "visualReviewRecommendation": {
+    "action": "inspect-route-readability",
+    "signals": {
+      "resolvedCrossovers": 1,
+      "routesOverSuggestedBends": 5
+    },
+    "reason": "Automated gates passed, but crossings or detours still need perceptual review before claiming visual quality.",
+    "affectedRoutes": {
+      "crossings": [
+        {
+          "left": {
+            "id": "ui-to-storage",
+            "from": "streamlit",
+            "to": "storage",
+            "label": "Save / load reference and metadata",
+            "collectionIndex": 3,
+            "artifactIndex": 4
+          },
+          "right": {
+            "id": "inspection-to-ui",
+            "from": "inspection",
+            "to": "streamlit",
+            "label": "Statuses · diagnostics · aligned image",
+            "collectionIndex": 8,
+            "artifactIndex": 9
+          },
+          "point": [
+            464,
+            266
+          ],
+          "sharedNode": "streamlit"
+        }
+      ],
+      "detours": [
+        {
+          "relationship": {
+            "id": "user-to-ui",
+            "from": "operator",
+            "to": "streamlit",
+            "label": "Upload · annotate · inspect",
+            "collectionIndex": 0,
+            "artifactIndex": 1
+          },
+          "bends": 3,
+          "stretch": 1.264
+        },
+        {
+          "relationship": {
+            "id": "annotations-to-storage",
+            "from": "annotation",
+            "to": "storage",
+            "label": "Read / write annotation JSON",
+            "collectionIndex": 2,
+            "artifactIndex": 3
+          },
+          "bends": 3,
+          "stretch": 1.239
+        },
+        {
+          "relationship": {
+            "id": "ui-to-storage",
+            "from": "streamlit",
+            "to": "storage",
+            "label": "Save / load reference and metadata",
+            "collectionIndex": 3,
+            "artifactIndex": 4
+          },
+          "bends": 3,
+          "stretch": 1
+        },
+        {
+          "relationship": {
+            "id": "ui-to-inspection",
+            "from": "streamlit",
+            "to": "inspection",
+            "label": "Reference + test image + annotations",
+            "collectionIndex": 4,
+            "artifactIndex": 5
+          },
+          "bends": 3,
+          "stretch": 1.257
+        },
+        {
+          "relationship": {
+            "id": "inspection-to-alignment",
+            "from": "inspection",
+            "to": "alignment",
+            "label": "Align test image",
+            "collectionIndex": 5,
+            "artifactIndex": 6
+          },
+          "bends": 3,
+          "stretch": 1.255
+        }
+      ],
+      "truncated": false
+    },
+    "hints": [
+      "streamlit → storage and inspection → streamlit cross next to streamlit: move node storage or inspection so the two reach streamlit from different sides (for example one level with it, one directly above or below it).",
+      "operator → streamlit needs 3 bends: move node operator or streamlit so they share a row or column with matching centers, or sit diagonally with a clear corner.",
+      "annotation → storage needs 3 bends: move node annotation or storage so they share a row or column with matching centers, or sit diagonally with a clear corner.",
+      "streamlit → storage needs 3 bends: move node streamlit or storage so they share a row or column with matching centers, or sit diagonally with a clear corner.",
+      "streamlit → inspection needs 3 bends: move node streamlit or inspection so they share a row or column with matching centers, or sit diagonally with a clear corner.",
+      "inspection → alignment needs 3 bends: move node inspection or alignment so they share a row or column with matching centers, or sit diagonally with a clear corner."
+    ],
+    "repair": "Trace these relationships at the desktop viewport. For Architecture, use references/architecture-layout-repair.md: reflow a blocked main path or tangled connected scene, and repair an isolated defect locally only when the surrounding composition is accepted. Preserve all semantic content and user-fixed geometry. Rerun finalize once after the edit."
+  }
+}
